@@ -7,7 +7,6 @@ on:
 jobs:
   build-push-deploy:
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
       packages: write
@@ -24,12 +23,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
-          run: 
-            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-            IMAGE=ghcr.io/$OWNER/devops-lab-app:latest
-            echo "Using IMAGE=$IMAGE"
-            docker build -t $IMAGE ./app
-            docker push $IMAGE
+        run: |
+          # Lowercase the owner name for Docker compatibility
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE=ghcr.io/$OWNER/devops-lab-app:latest
+          echo "Building $IMAGE"
+          docker build -t $IMAGE ./app
+          docker push $IMAGE
 
       - name: Deploy to k3s on EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -37,11 +37,13 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          script:
+          script: |
             set -e
+            # Redefine OWNER on the remote side
             OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-
-            cat > deployment.yml << EOF
+            
+            # Use '<<-EOF' to handle indentation or ensure clean formatting
+            cat <<EOF > deployment.yml
             apiVersion: apps/v1
             kind: Deployment
             metadata:
@@ -63,7 +65,7 @@ jobs:
                         - containerPort: 80
             EOF
 
-            cat > service.yml << 'EOF'
+            cat <<'EOF' > service.yml
             apiVersion: v1
             kind: Service
             metadata:
@@ -81,4 +83,3 @@ jobs:
             kubectl apply -f deployment.yml
             kubectl apply -f service.yml
             kubectl rollout status deployment/devops-app
-            kubectl get svc devops-service

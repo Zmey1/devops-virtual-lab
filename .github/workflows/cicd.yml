@@ -1,0 +1,84 @@
+name: DevOps CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        run: |
+          IMAGE=ghcr.io/${{ github.repository_owner }}/devops-lab-app:latest
+          docker build -t $IMAGE ./app
+          docker push $IMAGE
+
+      - name: Deploy to k3s on EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            mkdir -p ~/devops-lab
+            cd ~/devops-lab
+            # Pull latest manifests from repo by downloading raw files from GitHub
+            # (Simpler approach: use 'kubectl apply' with heredoc content below)
+            cat > deployment.yml << 'EOF'
+            apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: devops-app
+            spec:
+              replicas: 2
+              selector:
+                matchLabels:
+                  app: devops
+              template:
+                metadata:
+                  labels:
+                    app: devops
+                spec:
+                  containers:
+                    - name: devops-container
+                      image: ghcr.io/${{ github.repository_owner }}/devops-lab-app:latest
+                      ports:
+                        - containerPort: 80
+            EOF
+
+            cat > service.yml << 'EOF'
+            apiVersion: v1
+            kind: Service
+            metadata:
+              name: devops-service
+            spec:
+              type: NodePort
+              selector:
+                app: devops
+              ports:
+                - port: 80
+                  targetPort: 80
+                  nodePort: 30080
+            EOF
+
+            kubectl apply -f deployment.yml
+            kubectl apply -f service.yml
+            kubectl rollout status deployment/devops-app
+            kubectl get svc devops-service

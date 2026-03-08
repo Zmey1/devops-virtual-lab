@@ -1,0 +1,29 @@
+- name: Setup k3s Kubernetes on EC2
+  hosts: servers
+  become: yes
+  tasks:
+    - name: Install k3s (single node)
+      shell: |
+        curl -sfL https://get.k3s.io | sh -
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Ensure k3s service is running
+      service:
+        name: k3s
+        state: started
+        enabled: yes
+
+    - name: Copy kubeconfig to ec2-user home
+      shell: |
+        mkdir -p /home/ec2-user/.kube
+        cp /etc/rancher/k3s/k3s.yaml /home/ec2-user/.kube/config
+        chown -R ec2-user:ec2-user /home/ec2-user/.kube
+      args:
+        creates: /home/ec2-user/.kube/config
+
+    - name: Allow kubectl for ec2-user
+      lineinfile:
+        path: /home/ec2-user/.bashrc
+        line: 'export KUBECONFIG=/home/ec2-user/.kube/config'
+        create: yes

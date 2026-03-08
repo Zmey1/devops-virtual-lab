@@ -1,0 +1,17 @@
+# Secrets / keys
+*.pem
+*.key
+.env
+secrets.*
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+.terraform.lock.hcl
+
+# Python / node / misc
+__pycache__/
+node_modules/
+.DS_Store
+*.swp

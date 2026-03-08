@@ -24,10 +24,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
-        run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/devops-lab-app:latest
-          docker build -t $IMAGE ./app
-          docker push $IMAGE
+          run: |
+            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+            IMAGE=ghcr.io/$OWNER/devops-lab-app:latest
+            echo "Using IMAGE=$IMAGE"
+            docker build -t $IMAGE ./app
+            docker push $IMAGE
 
       - name: Deploy to k3s on EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -37,11 +39,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            mkdir -p ~/devops-lab
-            cd ~/devops-lab
-            # Pull latest manifests from repo by downloading raw files from GitHub
-            # (Simpler approach: use 'kubectl apply' with heredoc content below)
-            cat > deployment.yml << 'EOF'
+            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+
+            cat > deployment.yml << EOF
             apiVersion: apps/v1
             kind: Deployment
             metadata:
@@ -58,7 +58,7 @@ jobs:
                 spec:
                   containers:
                     - name: devops-container
-                      image: ghcr.io/${{ github.repository_owner }}/devops-lab-app:latest
+                      image: ghcr.io/$OWNER/devops-lab-app:latest
                       ports:
                         - containerPort: 80
             EOF
